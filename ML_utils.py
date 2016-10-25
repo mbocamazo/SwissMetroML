@@ -30,10 +30,9 @@ def build_dict(xs):
             d[x] = []
     return d
 
-def tt_split(X,y,split):
-    # inclusive indexing necessitates subtraction
-    Xtrain = X.iloc[:split-1,:]
+def tt_split(X,y,split):    
+    Xtrain = X.iloc[:split,:]
     Xtest = X.iloc[split:,:]
-    ytrain = y.iloc[:split-1]
+    ytrain = y.iloc[:split]
     ytest = y.iloc[split:]
     return Xtrain, Xtest, ytrain, ytest
