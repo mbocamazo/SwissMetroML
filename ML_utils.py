@@ -1,6 +1,9 @@
 import csv
 import numpy as np
 import sklearn
+import sklearn.preprocessing
+from sklearn.linear_model import LogisticRegression
+import sklearn.pipeline
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -44,3 +47,165 @@ def print_predict(X_ml, model, ytrain, ytest, split):
     print("Training Accuracy: " + str(sklearn.metrics.accuracy_score(ytrain, dy_x[:split])))
     print("Testing  Log Loss: " + str(sklearn.metrics.log_loss(ytest, py_x[split:])))
     print("Testing  Accuracy: " + str(sklearn.metrics.accuracy_score(ytest, dy_x[split:])))
+
+def construct_label_vec(X, dy_x1, dy_x2):
+    pointer_1 = 0
+    pointer_2 = 0
+    pointer_label = 0
+    label_vec = np.zeros((len(X),1))
+    for i in X.index:
+        if X.loc[i,'CAR_AV'] == 1:
+            if dy_x1[pointer_1]==1:
+                label_vec[pointer_label] = 3 # this is the code for CAR
+            else:
+                label_vec[pointer_label] = dy_x2[pointer_2]
+                pointer_2 += 1
+            pointer_1 += 1
+        else:
+            label_vec[pointer_label] = dy_x2[pointer_2]
+            pointer_2 += 1
+        pointer_label +=1 
+    return label_vec
+            
+
+def multistage_model(Xtrain, Xtest, ytrain, ytest, ML_feat):
+    # TRAIN
+    Xtrain_car_av_index = Xtrain['CAR_AV']==1
+    Xtrain_car_av = Xtrain[Xtrain_car_av_index]
+    # this indexes into the CAR_AV examples and checks if the chosen mode is CAR
+    ytrain_car_non = ytrain[Xtrain_car_av_index] == 3 
+
+    scaler = sklearn.preprocessing.StandardScaler()
+    clf = LogisticRegression()
+    model1 = sklearn.pipeline.Pipeline([('scaler',scaler),('LogReg',clf)])
+    model1.fit(Xtrain_car_av[ML_feat], ytrain_car_non)
+    dy_x = model1.predict(Xtrain_car_av[ML_feat])
+    # these are the discrete predictions of car presence
+    # so we take the negative predictions as part of the training data for next stage
+    Xtrain_pTR = Xtrain_car_av[~dy_x]
+    ytrain_car_av = ytrain[Xtrain['CAR_AV']==1]
+    ytrain_pTR = ytrain_car_av[~dy_x]
+    Xtrain_no_car = Xtrain[~Xtrain_car_av_index]
+    ytrain_no_car = ytrain[~Xtrain_car_av_index]
+    Xtr_stage2 = pd.concat([Xtrain_pTR, Xtrain_no_car])
+    ytr_stage2 = pd.concat([ytrain_pTR, ytrain_no_car])
+
+    scaler2 = sklearn.preprocessing.StandardScaler()
+    clf2 = LogisticRegression()
+    model2 = sklearn.pipeline.Pipeline([('scaler',scaler2),('LogReg',clf2)])
+    model2.fit(Xtr_stage2[ML_feat], ytr_stage2)
+    dy_x2 = model2.predict(Xtr_stage2[ML_feat])
+    dy_train = construct_label_vec(Xtrain, dy_x, dy_x2)
+    train_acc = sklearn.metrics.accuracy_score(ytrain, dy_train)
+
+    # TEST
+    Xtest_car_av_index = Xtest['CAR_AV']==1
+    Xtest_car_av = Xtest[Xtest_car_av_index]    
+    ytest_car_non = ytest[Xtest_car_av_index]==3 # this indexes into the CAR_AV examples
+    dy_x_test = model1.predict(Xtest_car_av[ML_feat])
+    
+    ytest_car_av = ytest[Xtest_car_av_index]
+    Xtest_pTR = Xtest_car_av[~dy_x_test]
+    ytest_pTR = ytest_car_av[~dy_x_test]
+    Xtest_no_car = Xtest[Xtest['CAR_AV']!=1]
+    ytest_no_car = ytest[Xtest['CAR_AV']!=1]
+
+    Xte_stage2 = pd.concat([Xtest_pTR, Xtest_no_car])
+    yte_stage2 = pd.concat([ytest_pTR, ytest_no_car])
+
+    dy_x2_test = model2.predict(Xte_stage2[ML_feat])
+    dy_test = construct_label_vec(Xtest, dy_x_test, dy_x2_test)
+    test_acc = sklearn.metrics.accuracy_score(ytest, dy_test)
+
+    return model1, model2, dy_train, dy_test
+
+
+def multistage_model_multinomial(Xtrain, Xtest, ytrain, ytest, ML_feat):
+    # TRAIN
+    Xtrain_car_av_index = Xtrain['CAR_AV']==1
+    Xtrain_car_av = Xtrain[Xtrain_car_av_index]
+    # this indexes into the CAR_AV examples and checks if the chosen mode is CAR
+    ytrain_car_non = ytrain[Xtrain_car_av_index] == 3 
+
+    scaler = sklearn.preprocessing.StandardScaler()
+    clf = LogisticRegression()
+    model1 = sklearn.pipeline.Pipeline([('scaler',scaler),('LogReg',clf)])
+    model1.fit(Xtrain_car_av[ML_feat], ytrain_car_non)
+    dy_x = model1.predict(Xtrain_car_av[ML_feat])
+    # these are the discrete predictions of car presence
+    # so we take the negative predictions as part of the training data for next stage
+    Xtrain_pTR = Xtrain_car_av[~dy_x]
+    ytrain_car_av = ytrain[Xtrain['CAR_AV']==1]
+    ytrain_pTR = ytrain_car_av[~dy_x]
+    Xtrain_no_car = Xtrain[~Xtrain_car_av_index]
+    ytrain_no_car = ytrain[~Xtrain_car_av_index]
+    Xtr_stage2 = pd.concat([Xtrain_pTR, Xtrain_no_car])
+    ytr_stage2 = pd.concat([ytrain_pTR, ytrain_no_car])
+
+    scaler2 = sklearn.preprocessing.StandardScaler()
+    clf2 = LogisticRegression(solver = 'lbfgs', multi_class='multinomial')
+    model2 = sklearn.pipeline.Pipeline([('scaler',scaler2),('LogReg',clf2)])
+    model2.fit(Xtr_stage2[ML_feat], ytr_stage2)
+    dy_x2 = model2.predict(Xtr_stage2[ML_feat])
+    dy_train = construct_label_vec(Xtrain, dy_x, dy_x2)
+    train_acc = sklearn.metrics.accuracy_score(ytrain, dy_train)
+
+    # TEST
+    Xtest_car_av_index = Xtest['CAR_AV']==1
+    Xtest_car_av = Xtest[Xtest_car_av_index]    
+    ytest_car_non = ytest[Xtest_car_av_index]==3 # this indexes into the CAR_AV examples
+    dy_x_test = model1.predict(Xtest_car_av[ML_feat])
+    
+    ytest_car_av = ytest[Xtest_car_av_index]
+    Xtest_pTR = Xtest_car_av[~dy_x_test]
+    ytest_pTR = ytest_car_av[~dy_x_test]
+    Xtest_no_car = Xtest[Xtest['CAR_AV']!=1]
+    ytest_no_car = ytest[Xtest['CAR_AV']!=1]
+
+    Xte_stage2 = pd.concat([Xtest_pTR, Xtest_no_car])
+    yte_stage2 = pd.concat([ytest_pTR, ytest_no_car])
+
+    dy_x2_test = model2.predict(Xte_stage2[ML_feat])
+    dy_test = construct_label_vec(Xtest, dy_x_test, dy_x2_test)
+    test_acc = sklearn.metrics.accuracy_score(ytest, dy_test)
+
+    return model1, model2, dy_train, dy_test
+
+# from http://zacstewart.com/2014/08/05/pipelines-of-featureunions-of-pipelines.html
+"""
+class ColumnExtractor(TransformerMixin):
+
+    def __init__(self, columns=[]):
+        self.columns = columns
+
+    def fit_transform(self, X, y=None, **fit_params):
+        self.fit(X, y, **fit_params)
+        return self.transform(X)
+
+    def transform(self, X, **transform_params):
+        return X[self.columns]
+
+    def fit(self, X, y=None, **fit_params):
+        return self
+
+class HourOfDayTransformer(TransformerMixin):
+
+    def transform(self, X, **transform_params):
+        hours = DataFrame(X['datetime'].apply(lambda x: x.hour))
+        return hours
+
+    def fit(self, X, y=None, **fit_params):
+        return self
+
+class ModelTransformer(TransformerMixin):
+
+    def __init__(self, model):
+        self.model = model
+
+    def fit(self, *args, **kwargs):
+        self.model.fit(*args, **kwargs)
+        return self
+
+    def transform(self, X, **transform_params):
+        return DataFrame(self.model.predict(X))
+"""
