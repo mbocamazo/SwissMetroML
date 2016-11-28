@@ -36,3 +36,11 @@ def tt_split(X,y,split):
     ytrain = y.iloc[:split]
     ytest = y.iloc[split:]
     return Xtrain, Xtest, ytrain, ytest
+
+def print_predict(X_ml, model, ytrain, ytest, split):
+    py_x = model.predict_proba(X_ml)
+    dy_x = model.predict(X_ml)
+    print("Training Log Loss: " + str(sklearn.metrics.log_loss(ytrain, py_x[:split])))
+    print("Training Accuracy: " + str(sklearn.metrics.accuracy_score(ytrain, dy_x[:split])))
+    print("Testing  Log Loss: " + str(sklearn.metrics.log_loss(ytest, py_x[split:])))
+    print("Testing  Accuracy: " + str(sklearn.metrics.accuracy_score(ytest, dy_x[split:])))
