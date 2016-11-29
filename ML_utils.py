@@ -120,7 +120,7 @@ def multistage_model(Xtrain, Xtest, ytrain, ytest, ML_feat):
     return model1, model2, dy_train, dy_test
 
 
-def multistage_model_multinomial(Xtrain, Xtest, ytrain, ytest, ML_feat):
+def multistage_model_gen(Xtrain, Xtest, ytrain, ytest, ML_feat, clf1, clf2):
     # TRAIN
     Xtrain_car_av_index = Xtrain['CAR_AV']==1
     Xtrain_car_av = Xtrain[Xtrain_car_av_index]
@@ -128,8 +128,7 @@ def multistage_model_multinomial(Xtrain, Xtest, ytrain, ytest, ML_feat):
     ytrain_car_non = ytrain[Xtrain_car_av_index] == 3 
 
     scaler = sklearn.preprocessing.StandardScaler()
-    clf = LogisticRegression()
-    model1 = sklearn.pipeline.Pipeline([('scaler',scaler),('LogReg',clf)])
+    model1 = sklearn.pipeline.Pipeline([('scaler',scaler),('Clf1',clf1)])
     model1.fit(Xtrain_car_av[ML_feat], ytrain_car_non)
     dy_x = model1.predict(Xtrain_car_av[ML_feat])
     # these are the discrete predictions of car presence
@@ -143,8 +142,7 @@ def multistage_model_multinomial(Xtrain, Xtest, ytrain, ytest, ML_feat):
     ytr_stage2 = pd.concat([ytrain_pTR, ytrain_no_car])
 
     scaler2 = sklearn.preprocessing.StandardScaler()
-    clf2 = LogisticRegression(solver = 'lbfgs', multi_class='multinomial')
-    model2 = sklearn.pipeline.Pipeline([('scaler',scaler2),('LogReg',clf2)])
+    model2 = sklearn.pipeline.Pipeline([('scaler',scaler2),('Clf2',clf2)])
     model2.fit(Xtr_stage2[ML_feat], ytr_stage2)
     dy_x2 = model2.predict(Xtr_stage2[ML_feat])
     dy_train = construct_label_vec(Xtrain, dy_x, dy_x2)
